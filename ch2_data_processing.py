@@ -106,3 +106,86 @@ print(integers)
 
 strings = tokenizer.decode(integers)
 print(strings)
+
+"""2.6-data-sample-with-sliding-window"""
+#tokenize the Verdict by BPE
+with open("the-verdict.txt", "r", encoding="utf-8") as f:
+    raw_text = f.read()
+enc_text = tokenizer.encode(raw_text)
+print(len(enc_text))
+
+#removing the first 50 tokens from the dataset for demostration purposes(author mentioned it will"results a slightly more interesting text passage later")
+enc_sample = enc_text[50:]
+#context size determines how many tokens are included in the input
+context_size  = 4
+x = enc_sample[:context_size]
+y = enc_sample[1:context_size+1]
+print(f"x: {x}")
+print(f"y:      {y}")
+
+#the next-word prediction tasks:
+for i in range(1, context_size+1):
+    context = enc_sample[:i]
+    desired = enc_sample[i]
+    print(context, "---->", desired)
+#convert previous token IDs back to text
+for i in range(1, context_size+1):
+    context = enc_sample[:i]
+    desired = enc_sample[i]
+    print(tokenizer.decode(context), "---->", tokenizer.decode([desired]))
+
+#dataset class  based on PyTorch built-in Dataset and DataLoader classes
+import torch 
+from torch.utils.data import Dataset, DataLoader
+
+class GPTDatasetV1(Dataset):
+    def  __init__(self, txt, tokenizer, max_length, stride): # stride controls how many tokens the sliding window moves forward each time
+        self.input_ids = []
+        self.target_ids = []
+
+        token_ids = tokenizer.encode(txt) #tokenize the entire input files
+        #use a sliding window to chunk the book into overlapping sequencces of max_length
+        for i in range(0, len(token_ids) - max_length, stride):
+            input_chunk = token_ids[i:i + max_length]
+            target_chunk = token_ids[i+1:i+max_length + 1]
+            self.input_ids.append(torch.tensor(input_chunk))
+            self.target_ids.append(torch.tensor(target_chunk))
+
+        #returns the total number of row from the dataset
+    def __len__(self):
+        return len(self.input_ids)
+    #returns a single row from the dataset
+    def __getitem__(self, idx):
+        return self.input_ids[idx], self.target_ids[idx]
+
+"""use GPTDatasetV1 to load the inputs in batches via PyTorch DataLoader."""
+# drop_last = True means that the last batch will be dropped if it is smaller than the specified batch size, which prevents 
+# the model from training on incomplete batches that may not provide enough information for learning, especially when the dataset size is not perfectly divisible by the batch size.  
+def create_dataloader_v1(txt, batch_size=4, max_length=256, 
+                         stride=128, shuffle=True, drop_last=True,
+                         num_workers=0):
+    tokenizer = tiktoken.get_encoding("gpt2")
+    dataset = GPTDatasetV1(txt, tokenizer, max_length, stride)
+    dataloader = DataLoader(dataset, batch_size = batch_size, shuffle=shuffle,
+                            drop_last=drop_last, num_workers=num_workers)
+    return dataloader
+
+with open("the-verdict.txt", "r", encoding="utf-8") as f:
+    raw_text = f.read()
+
+#in actual LLM training, we usually use much larger context size(max_length) like 256 or even larger. 
+#batch_size controls how many sequences are included in each batch, while max_length controls how many tokens are included in each sequence.  
+dataloader = create_dataloader_v1(raw_text, batch_size=1, max_length=4, stride=1, shuffle=False)
+#Converts dataloader into a Python iterator to fetch the next entry via Python's built-in next() function
+data_iter = iter(dataloader)
+first_batch = next(data_iter)
+print(first_batch) 
+#show the result of stride = 1
+second_batch = next(data_iter)
+print(second_batch)
+# use data loader to sample with a batch size greater than 1:
+dataloader = create_dataloader_v1(raw_text, batch_size=8, max_length=4, stride=4, shuffle=False)
+data_iter=iter(dataloader)
+inputs, targets=next(data_iter)
+print("Inputs\n", inputs)
+print("\nTargets:\n", targets)
