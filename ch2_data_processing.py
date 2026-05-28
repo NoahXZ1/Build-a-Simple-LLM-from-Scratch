@@ -1,7 +1,11 @@
 #This is code implementation of the book "Build a Large Language Model from Scratch" 
 #begins on 05/18/2026, in ch2
 #Hail Mary!
-with open("the-verdict.txt", "r", encoding="utf-8") as f:
+from pathlib import Path
+
+DATA_PATH = Path(__file__).with_name("the-verdict.txt")
+
+with open(DATA_PATH, "r", encoding="utf-8") as f:
     raw_text = f.read()
 print("Total number of character:", len(raw_text))
 print(raw_text[:99])
@@ -109,7 +113,7 @@ print(strings)
 
 """2.6-data-sample-with-sliding-window"""
 #tokenize the Verdict by BPE
-with open("the-verdict.txt", "r", encoding="utf-8") as f:
+with open(DATA_PATH, "r", encoding="utf-8") as f:
     raw_text = f.read()
 enc_text = tokenizer.encode(raw_text)
 print(len(enc_text))
@@ -170,7 +174,7 @@ def create_dataloader_v1(txt, batch_size=4, max_length=256,
                             drop_last=drop_last, num_workers=num_workers)
     return dataloader
 
-with open("the-verdict.txt", "r", encoding="utf-8") as f:
+with open(DATA_PATH, "r", encoding="utf-8") as f:
     raw_text = f.read()
 
 #in actual LLM training, we usually use much larger context size(max_length) like 256 or even larger. 
@@ -189,3 +193,48 @@ data_iter=iter(dataloader)
 inputs, targets=next(data_iter)
 print("Inputs\n", inputs)
 print("\nTargets:\n", targets)
+
+"""2.7-creating token embeddings"""
+#a small sample
+input_ids = torch.tensor([2,3,5,1])
+
+#vocabulary with size 6
+vocab_size = 6
+output_dim = 3  #in GPT-3 the embedding size is 12288 dimensions
+
+#instantiate an embedding layer in PyTorch, seed 123 for reproducibility
+torch.manual_seed(123)
+embedding_layer = torch.nn.Embedding(vocab_size, output_dim)
+#the print shows the embedding layer's underlying weight matrix
+print(embedding_layer.weight)
+
+#apply to a token ID to obtain the embedding vector vector(the 4th row of token ID 3)
+print(embedding_layer(torch.tensor([3])))
+#apply to all four token IDs, get a 4*3 matrix they are the 3rd, 4th 6th and 2nd tokens in the vocabulary. 
+print(embedding_layer(input_ids))
+
+"""implementing a 256-demension vector representation"""
+vocab_size = 50257
+output_dim = 256
+token_embedding_layer = torch.nn.Embedding(vocab_size, output_dim)
+
+#instantiate the data loader
+max_length = 4
+dataloader = create_dataloader_v1(raw_text, batch_size = 8, max_length=max_length,
+                                  stride = max_length, shuffle=False)
+data_iter=iter(dataloader)
+inputs, targets=next(data_iter)
+print("Token IDs:\n", inputs)
+print("\nInputs shape:\n", inputs.shape)
+#apply the token embedding layer to the input token IDs, get a 8*4*256 tensor. 
+token_embeddings = token_embedding_layer(inputs)
+print(token_embeddings.shape)
+
+#create another embedding layer which has the same embedding dimension as the token_embedding_layer(GPT model's absolute embedding approach)
+context_length = max_length
+pos_embedding_layer = torch.nn.Embedding(context_length, output_dim)
+pos_embeddings = pos_embedding_layer(torch.arange(context_length))
+print(pos_embeddings.shape)
+#add position embeddings to token embeddings, get a 8*4*256 tensor
+input_embeddings = token_embeddings+pos_embeddings
+print(input_embeddings.shape)
