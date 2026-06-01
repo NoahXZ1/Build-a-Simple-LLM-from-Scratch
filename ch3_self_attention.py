@@ -84,3 +84,70 @@ print(attn_score_22)
 #then generalize the computation to all attention scores by matrix multiplication
 attn_scores_2 = query_2 @ keys.T
 print(attn_scores_2)
+#compute the attentions weights by applying the softmax function to the attention scores
+d_k = keys.shape[-1]
+attn_weights_2 = torch.softmax(attn_scores_2/d_k**0.5, dim = -1)
+print(attn_weights_2)
+#compute the context vector by taking the weighted sum of the value vectors(multiply each value vector(v) with its respective attention weight and then summing them up))
+context_vec_2 = attn_weights_2 @ values
+print(context_vec_2)
+#implement a compact self-attention Python class
+
+"SelfAttention is a class derived from nn.Module, which is a fundemental building block of PyTorch models, "
+"providing necassary functionality for model layer creation and management. "
+import torch.nn as nn
+class SelfAttention_v1(nn.Module):
+    #initialize three trainable weight matrices, W_query, W_key and W_value. 
+    def __init__(self, d_in, d_out):
+        super().__init__()
+        self.W_query = nn.Parameter(torch.rand(d_in, d_out))
+        self.W_key = nn.Parameter(torch.rand(d_in, d_out))
+        self.W_value = nn.Parameter(torch.rand(d_in, d_out))
+
+    def forward(self, x):
+        keys = x @ self.W_key
+        queries = x @ self.W_query
+        values = x @ self.W_value
+        attn_scores = queries @ keys.T # omega
+        attn_weights = torch.softmax(
+            attn_scores / keys.shape[-1]**0.5, dim=-1
+        )
+        context_vec = attn_weights @ values
+        return context_vec
+#a simple test of the class
+torch.manual_seed(123)
+sa_v1 = SelfAttention_v1(d_in, d_out)
+#The second row matches the content of context_vec_2 before
+print(sa_v1(inputs))
+
+#a self_attention class using PyTorch's Linear layers
+# nn.Linear has an optimized weight initialization scheme, more stable and efficient for model training
+class SelfAttention_v2(nn.Module):
+    def __init__(self, d_in, d_out, qkv_bias=False):
+        super().__init__()
+        self.W_query = nn.Linear(d_in, d_out, bias=qkv_bias)
+        self.W_key = nn.Linear(d_in, d_out, bias=qkv_bias)
+        self.W_value = nn.Linear(d_in, d_out, bias=qkv_bias)
+    
+    def forward(self, x):
+        keys = self.W_key(x)
+        queries = self.W_query(x)
+        values = self.W_value(x)
+        attn_scores = queries @ keys.T
+        attn_weights = torch.softmax(
+            attn_scores / keys.shape[-1]**0.5, dim = -1
+        )
+        context_vec = attn_weights @ values
+        return context_vec
+#using SelfAttention_v2 class similar to v1
+#v2 has different output due to a different initial weights for the weight matrices since nn.Linear uses a more sophisticated weight initialization scheme. 
+torch.manual_seed(789)
+sa_v2 = SelfAttention_v2(d_in, d_out)
+#to make the output of sa_v2 same as sa_v1, as nn.Linear initializes its weights differently, we can directly copy the weights from sa_v1 to sa_v2, but need to transpose them since nn.Linear expects weights in the shape of (out features, in features)
+# while in sa_v1 we have the shape of(in features, out features)
+sa_v2.W_query.weight.data = sa_v1.W_query.data.T
+sa_v2.W_key.weight.data = sa_v1.W_key.data.T
+sa_v2.W_value.weight.data = sa_v1.W_value.data.T
+print(sa_v2(inputs))
+# to verify that the output of two implementations are the same. 
+print(torch.allclose(sa_v1(inputs), sa_v2(inputs)))
