@@ -11,6 +11,8 @@ GPT_CONFIG_124M = {
 }
 
 #implement a placeholder GPT model architecture class
+import re
+
 import torch
 import torch.nn as nn
 
@@ -125,3 +127,98 @@ mean = out_ln.mean(dim=-1, keepdim=True)
 var = out_ln.var(dim=-1, unbiased = False, keepdim=True)
 print("Means\n", mean)
 print("Variance:\n", var)
+"""-----------------------------4.3 Implementing a feed forward network with GELU activation---------------------------------"""
+# a simple class 
+class GELU(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        #GELU activation function formula
+        return 0.5*x*(1+torch.tanh(torch.sqrt(torch.tensor(2.0/torch.pi))*(x+0.044715*torch.pow(x,3))
+                                   ))
+import matplotlib.pyplot as plt
+gelu, relu = GELU(), nn.ReLU()
+# creates 100 sample data points in the range -3 to 3
+x = torch.linspace(-3, 3, 100)
+y_gelu, y_relu = gelu(x), relu(x)
+plt.figure(figsize=(8,3))
+#draw the GELU and ReLU activation functions using subplots
+for i, (y, label) in enumerate(zip([y_gelu, y_relu], ["GELU", "ReLU"]), 1):
+    plt.subplot(1,2,i)
+    plt.plot(x, y)
+    plt.title(label)
+    plt.xlabel("x")
+    plt.ylabel(f"{label}(x)")
+    plt.grid(True)
+plt.tight_layout()
+# plt.show()
+#a simple class of feed forward network
+class FeedForward(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        #this is a small neural network with 2 linear layers and a GELU activation 
+        self.layers = nn.Sequential(
+            nn.Linear(cfg["emb_dim"], 4*cfg["emb_dim"]),
+            GELU(),
+            nn.Linear(4*cfg["emb_dim"], cfg["emb_dim"]),
+        )
+    def forward(self, x):
+        return self.layers(x)
+# initialize a feed forward  module with a token embedding dimension of 768 and feed it a batch input with two samples and three tokens each:
+ffn = FeedForward(GPT_CONFIG_124M)
+x = torch.rand(2,3,768) # create a batch input with batch dimensions 2
+out = ffn(x)
+print(out.shape)
+"""----------------------------------4.5 Implementing a neural network to illustrate shortcut connections--------------------------------"""
+class ExampleDeepNeuralNetwork(nn.Module):
+    def __init__(self, layer_sizes, use_shortcut):
+        super().__init__()
+        self.use_shortcut = use_shortcut
+        #implement 5 linear layers with GELU
+        self.layers = nn.ModuleList([
+            nn.Sequential(nn.Linear(layer_sizes[0], layer_sizes[1]), GELU()),
+            nn.Sequential(nn.Linear(layer_sizes[1], layer_sizes[2]), GELU()),
+            nn.Sequential(nn.Linear(layer_sizes[2], layer_sizes[3]), GELU()),
+            nn.Sequential(nn.Linear(layer_sizes[3], layer_sizes[4]), GELU()),
+            nn.Sequential(nn.Linear(layer_sizes[4], layer_sizes[5]), GELU()),              
+        ])
+
+    def forward(self, x):
+        for layer in self.layers:
+            #compute the output of the current layer
+            layer_output = layer(x)
+            #check if shortcut can be applied
+            if self.use_shortcut and x.shape == layer_output.shape:
+                x = x+layer_output
+            else:
+                x = layer_output
+        return x
+#initialize a neural network with 5 layers
+layer_sizes=[3,3,3,3,3,1]
+sample_input = torch.tensor([[1.,0.,-1.]])
+#specifies random seed for the initial weights for reproducibility
+torch.manual_seed(123)
+model_without_shortcut = ExampleDeepNeuralNetwork(layer_sizes, use_shortcut=False)
+#implement a function that computes the gradients in the model's backward pass
+def print_gradients(model, x):
+    output=model(x)
+    target = torch.tensor([[0.]])
+
+    loss = nn.MSELoss()
+    #calculate loss based on how close the target and output are 
+    loss = loss(output, target)
+    #backward pass to calculate gradients
+    loss.backward()
+
+    for name, param in model.named_parameters():
+        if 'weight' in name:
+            print(f"{name} has gradient mean of {param.grad.abs().mean().item()}")
+#this will print a very small mean gradient
+print_gradients(model_without_shortcut, sample_input)
+#with skip connection
+torch.manual_seed(123)
+model_with_shortcut = ExampleDeepNeuralNetwork(
+    layer_sizes, use_shortcut=True
+)
+print_gradients(model_with_shortcut, sample_input)
