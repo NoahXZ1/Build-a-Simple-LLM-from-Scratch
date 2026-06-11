@@ -258,7 +258,7 @@ print("context_vecs.shape:", context_vecs.shape)
 #no need to spereate the implementation of multi-head attention into two classes
 # the following class implements it by weight splitting
 class MultiHeadAttention(nn.Module):
-    def __init__(self, d_in, d_out, num_heads, qkv_bias=False):
+    def __init__(self, d_in, d_out, context_length, dropout, num_heads, qkv_bias=False):
         super().__init__()
         assert (d_out % num_heads == 0), \
              "d_out must be divisible by num_heads"
@@ -280,7 +280,7 @@ class MultiHeadAttention(nn.Module):
     def forward(self, x):
         # retrieve the batch size, number of tokens, and input embedding dimension from the input tensor x
         b, num_tokens, d_in = x.shape
-        keys = self.W_keys(x)
+        keys = self.W_key(x)
         queries = self.W_query(x)
         values = self.W_value(x)
         #reshape the keys,queries and values to separate the head dimension, 
@@ -314,7 +314,7 @@ class MultiHeadAttention(nn.Module):
 torch.manual_seed(123)
 batch_size, context_length, d_in=batch.shape
 d_out = 2
-mha = MultiHeadAttention(d_in,d_out, context_length,0.0 num_heads=2)
+mha = MultiHeadAttention(d_in,d_out, context_length, 0.0,num_heads=2)
 context_vecs=mha(batch)
 print(context_vecs)
 print("context_vecs.shape:", context_vecs.shape)

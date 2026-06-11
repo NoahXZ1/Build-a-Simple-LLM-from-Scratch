@@ -170,7 +170,7 @@ ffn = FeedForward(GPT_CONFIG_124M)
 x = torch.rand(2,3,768) # create a batch input with batch dimensions 2
 out = ffn(x)
 print(out.shape)
-"""----------------------------------4.5 Implementing a neural network to illustrate shortcut connections--------------------------------"""
+"""----------------------------------4.4 Implementing a neural network to illustrate shortcut connections--------------------------------"""
 class ExampleDeepNeuralNetwork(nn.Module):
     def __init__(self, layer_sizes, use_shortcut):
         super().__init__()
@@ -222,3 +222,48 @@ model_with_shortcut = ExampleDeepNeuralNetwork(
     layer_sizes, use_shortcut=True
 )
 print_gradients(model_with_shortcut, sample_input)
+"""------------------------------4.5 Implementing a transformer block--------------------------------"""
+# implement a transformer block component of GPT
+from ch3_self_attention import MultiHeadAttention
+
+class TransformerBlock(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.att=MultiHeadAttention(
+            d_in = cfg["emb_dim"],
+            d_out=cfg["emb_dim"],
+            context_length = cfg["context_length"],
+            num_heads = cfg["n_heads"],
+            dropout = cfg["drop_rate"],
+            qkv_bias = cfg["qkv_bias"])
+        self.ff = FeedForward(cfg)
+        self.norm1 = LayerNorm(cfg["emb_dim"])
+        self.norm2 = LayerNorm(cfg["emb_dim"])
+        self.drop_shortcut = nn.Dropout(cfg["drop_rate"])
+
+    def forward(self, x):
+        #shortcut connection for attention block
+        shortcut = x
+        x = self.norm1(x)
+        x = self.att(x)
+        x = self.drop_shortcut(x)
+        #add the original input back
+        x = x+shortcut
+        
+        #shortcut connection for feed forward block
+        shortcut = x
+        x =self.norm2(x)
+        x = self.ff(x)
+        x = self.drop_shortcut(x)
+        #add original input back
+        x = x+shortcut
+        return x
+#initialize a transformer block using configuration dictionary GPT_CONFIG_124M
+torch.manual_seed(123)
+# a sample input(batch_size, seq length, embedding dims)
+x = torch.rand(2,4,768)
+block=TransformerBlock(GPT_CONFIG_124M)
+output=block(x)
+
+print("Input shape:", x.shape)
+print("Output shape:", output.shape)
