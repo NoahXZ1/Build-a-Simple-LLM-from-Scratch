@@ -318,3 +318,60 @@ total_params_gpt2 = (
 )
 print(f"Number of trainable parameters "
     f"considering weight typing: {total_params_gpt2}")
+
+total_size_bytes = total_params * 4 #calculate the total size in bytes (assuming float32, 4 bytes per parameter)
+#convert to MB
+total_size_mb = total_size_bytes / (1024*1024)
+print(f"Total size of the model: {total_size_mb:.2f} MB")
+
+"""--------------------------Exercise4.1 : FFN vs MHA parameter counts---------------------------------"""
+def count_trainable_params(module):
+    return sum(p.numel() for p in module.parameters() if p.requires_grad)
+
+# Count parameters in one transformer block
+first_block = model.trf_blocks[0]
+ff_params_one_block = count_trainable_params(first_block.ff)
+mha_params_one_block = count_trainable_params(first_block.att)
+
+print("One block - FeedForward params:", ff_params_one_block)
+print("One block - MultiHeadAttention params:", mha_params_one_block)
+print("FF/MHA ratio (one block):", ff_params_one_block / mha_params_one_block)
+
+# Count parameters across all transformer blocks
+ff_params_all_blocks = sum(count_trainable_params(block.ff) for block in model.trf_blocks)
+mha_params_all_blocks = sum(count_trainable_params(block.att) for block in model.trf_blocks)
+
+print("All blocks - FeedForward params:", ff_params_all_blocks)
+print("All blocks - MultiHeadAttention params:", mha_params_all_blocks)
+print("FF/MHA ratio (all blocks):", ff_params_all_blocks / mha_params_all_blocks)
+
+"""--------------------------Exercise4.2 : Initialize GPT-2 Large and count parameters---------------------------------"""
+GPT_CONFIG_774M = {
+    "vocab_size": 50257,
+    "context_length": 1024,
+    "emb_dim": 1280,  # embedding dimension for GPT-2 Large
+    "n_heads": 20,     # number of attention heads for GPT-2 Large
+    "n_layers": 36,    # number of transformer blocks for GPT-2 Large
+    "drop_rate": 0.1,
+    "qkv_bias": False,
+}
+
+torch.manual_seed(123)
+model_large = GPTModel(GPT_CONFIG_774M)
+# calculate total parameters in the GPT-2 large model
+total_params_large = sum(p.numel() for p in model_large.parameters())
+total_params_large_weight_tied = (
+    total_params_large - sum(p.numel() for p in model_large.out_head.parameters())
+)
+
+print("\nGPT-2 Large config:", GPT_CONFIG_774M)
+print(f"Total parameters in GPT-2 Large: {total_params_large}")
+print(
+    "Total parameters in GPT-2 Large (considering weight tying): "
+    f"{total_params_large_weight_tied}"
+)
+#calculate the total size of the GPT-2 large model in MB
+total_size_bytes = total_params_large * 4 #calculate the total size in bytes (assuming float32, 4 bytes per parameter)
+#convert to MB
+total_size_mb = total_size_bytes / (1024*1024)
+print(f"Total size of the GPT-2 large model: {total_size_mb:.2f} MB")
