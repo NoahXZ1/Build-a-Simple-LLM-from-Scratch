@@ -375,3 +375,117 @@ total_size_bytes = total_params_large * 4 #calculate the total size in bytes (as
 #convert to MB
 total_size_mb = total_size_bytes / (1024*1024)
 print(f"Total size of the GPT-2 large model: {total_size_mb:.2f} MB")
+
+"""--------------------------4.7 Generating text-------------------------------"""
+#a function for the GPT model to generate text
+def generate_text_simple(model, idx, max_new_tokens, context_size):
+    for _ in range(max_new_tokens):
+        #crops current conext if it exceeds the supported context size
+        idx_cond = idx[:, -context_size:]
+        with torch.no_grad():
+            logits = model(idx_cond)
+
+        #focus only on the last time step, so that (batch, n_token, vocab_size) becomes (batch, vocab_size)
+        logits =logits[:, -1, :]
+        #probas has shape (batch, vocab_size)
+        #actually softmax is not necessary here, as the argmax can be applied directly to the logits. (here we add it for demonstration)
+        probas = torch.softmax(logits, dim=-1)
+        #idx_next has shape(batch, 1)
+        #argmax is used to select the token with the highest probability as the next token in the sequence(it returns the indices rather than the values)
+        idx_next = torch.argmax(probas, dim=-1, keepdim=True)
+        #appends sampled index to the running sequence, where idx has shape(batch,n_tokens+1)
+        idx = torch.cat((idx, idx_next), dim=1)
+
+    return idx
+# try our function with "Hello, I am" context as the input
+#we first encode the input context into token IDs
+start_context = "Hello, I am"
+encoded = tokenizer.encode(start_context)
+print("encoded:", encoded)
+#adds batch dimension
+encoded_tensor = torch.tensor(encoded).unsqueeze(0)
+print("encoded_tensor.shape:", encoded_tensor.shape)
+#disable dropout since we are not training the model
+model.eval()
+out = generate_text_simple(model=model, idx=encoded_tensor, max_new_tokens=6, context_size=GPT_CONFIG_124M["context_length"])
+print("Output:", out)
+print("Output length:", len(out[0]))
+#use the .decode method of the tokenizer to convert the IDs back into text
+decoded_output = tokenizer.decode(out.squeeze().tolist())
+print(decoded_output)
+
+"""--------------------------Exercise4.3: Separate dropout rates for each layer---------------------------------"""
+# The original GPT_CONFIG_124M uses a single "drop_rate" applied uniformly to all three
+# dropout locations: the embedding layer, the multi-head attention module, and the
+# shortcut (residual) connections. This exercise splits that into three independent values.
+
+GPT_CONFIG_124M_EX43 = {
+    "vocab_size": 50257,
+    "context_length": 1024,
+    "emb_dim": 768,
+    "n_heads": 12,
+    "n_layers": 12,
+    "drop_rate_emb": 0.1,       # dropout after embedding layer
+    "drop_rate_attn": 0.1,      # dropout inside MultiHeadAttention
+    "drop_rate_shortcut": 0.1,  # dropout on shortcut (residual) connections
+    "qkv_bias": False,
+}
+
+class TransformerBlockEx43(nn.Module):
+    """TransformerBlock that reads three separate dropout rates from cfg."""
+    def __init__(self, cfg):
+        super().__init__()
+        self.att = MultiHeadAttention(
+            d_in=cfg["emb_dim"],
+            d_out=cfg["emb_dim"],
+            context_length=cfg["context_length"],
+            num_heads=cfg["n_heads"],
+            dropout=cfg["drop_rate_attn"],   # <-- attention dropout
+            qkv_bias=cfg["qkv_bias"])
+        self.ff = FeedForward(cfg)
+        self.norm1 = LayerNorm(cfg["emb_dim"])
+        self.norm2 = LayerNorm(cfg["emb_dim"])
+        self.drop_shortcut = nn.Dropout(cfg["drop_rate_shortcut"])  # <-- shortcut dropout
+
+    def forward(self, x):
+        shortcut = x
+        x = self.norm1(x)
+        x = self.att(x)
+        x = self.drop_shortcut(x)
+        x = x + shortcut
+
+        shortcut = x
+        x = self.norm2(x)
+        x = self.ff(x)
+        x = self.drop_shortcut(x)
+        x = x + shortcut
+        return x
+
+class GPTModelEx43(nn.Module):
+    """GPTModel that reads three separate dropout rates from cfg."""
+    def __init__(self, cfg):
+        super().__init__()
+        self.tok_emb = nn.Embedding(cfg["vocab_size"], cfg["emb_dim"])
+        self.pos_emb = nn.Embedding(cfg["context_length"], cfg["emb_dim"])
+        self.drop_emb = nn.Dropout(cfg["drop_rate_emb"])  # <-- embedding dropout
+
+        self.trf_blocks = nn.Sequential(
+            *[TransformerBlockEx43(cfg) for _ in range(cfg["n_layers"])])
+
+        self.final_norm = LayerNorm(cfg["emb_dim"])
+        self.out_head = nn.Linear(cfg["emb_dim"], cfg["vocab_size"], bias=False)
+
+    def forward(self, in_idx):
+        batch_size, seq_len = in_idx.shape
+        tok_embeds = self.tok_emb(in_idx)
+        pos_embeds = self.pos_emb(torch.arange(seq_len, device=in_idx.device))
+        x = tok_embeds + pos_embeds
+        x = self.drop_emb(x)
+        x = self.trf_blocks(x)
+        x = self.final_norm(x)
+        return self.out_head(x)
+
+torch.manual_seed(123)
+model_ex43 = GPTModelEx43(GPT_CONFIG_124M_EX43)
+out_ex43 = model_ex43(batch)
+print("Exercise 4.3 - Output shape:", out_ex43.shape)  # expect (2, 6, 50257)
