@@ -1,5 +1,5 @@
 """This is for chapter 5, "Pretraining on Unlabeled Data"""
-#5.1.1 using GPT to generate text(recall of chp4)
+"""-----------------------------------5.1.1 using GPT to generate text(recall of chp4)------------------------------------"""
 import torch
 from ch4_Implementation_of_LLM_architecture import GPTModel
 
@@ -39,7 +39,7 @@ token_ids = generate_text_simple(
 )
 print("Output text:\n", token_ids_to_text(token_ids, tokenizer))
 
-#5.1.2 Calculating the text generation loss
+"""---------------------------------------------5.1.2 Calculating the text generation loss ---------------------------------------------"""
 inputs = torch.tensor([[16833, 3626, 6100],   #'every effort moves,
                       [40, 1107, 588]])       #'I really like'
 
@@ -82,3 +82,90 @@ print("Flattened targets:", targets_flat.shape)
 
 loss = torch.nn.functional.cross_entropy(logits_flat, targets_flat)
 print(loss)
+
+"""---------------------------------------------5.1.3 calculating loss for training and validation sets---------------------------------------------"""
+#load the "The Verdict" story dataset
+file_path = "the-verdict.txt"
+with open(file_path, "r", encoding = "utf-8") as file:
+    text_data = file.read()
+#check the dataset
+total_characters = len(text_data)
+total_tokens = len(tokenizer.encode(text_data))
+print("Characters:", total_characters)
+print("Tokens:", total_tokens)
+#define the training and validation dataset
+train_ratio = 0.9
+split_idx = int(train_ratio * len(text_data))
+train_data = text_data[:split_idx]
+val_data = text_data[split_idx:]
+
+from ch2_data_processing import create_dataloader_v1
+torch.manual_seed(123)
+
+train_loader = create_dataloader_v1(
+    train_data,
+    batch_size = 2,
+    max_length = GPT_CONFIG_124M["context_length"],
+    stride = GPT_CONFIG_124M["context_length"],
+    drop_last = True,
+    shuffle = True,
+    num_workers = 0
+)
+
+val_loader = create_dataloader_v1(
+    val_data,
+    batch_size = 2,
+    max_length = GPT_CONFIG_124M["context_length"],
+    stride = GPT_CONFIG_124M["context_length"],
+    drop_last = False,
+    shuffle = False,
+    num_workers = 0
+)
+
+#iterate through the training dataloader ensuring the data was created correctly
+print("Train loader:")
+for x, y in train_loader:
+    print(x.shape, y.shape)
+
+    print("\nValidation loader:")
+    for x, y in val_loader:
+        print(x.shape, y.shape)
+#this is a utility function to calculate the loss for a batch of input and target data, given a model and device (GPU)
+def calc_loss_batch(input_batch, target_batch, model, device):
+    # transfer the input and target batches to the specified device (GPU)
+    input_batch = input_batch.to(device)
+    target_batch = target_batch.to(device)
+    logits = model(input_batch)
+    loss = torch.nn.functional.cross_entropy(
+        logits.flatten(0,1), target_batch.flatten()
+    )
+    return loss
+#the function to calculate the loss over all the batches
+def calc_loss_loader(data_loader, model, device, num_batches = None):
+    total_loss = 0.
+    if len(data_loader) == 0:
+        return float("nan")
+    elif num_batches is None:
+        #iterate through all batches if no fixed num_batches is give
+        num_batches = len(data_loader)
+    else:
+        # a checker to ensure num_batches does not exceed the total number of batches in the data_loader
+        num_batches = min(num_batches, len(data_loader))
+    for i, (input_batch, target_batch) in enumerate(data_loader):
+        if i < num_batches:
+            loss = calc_loss_batch(input_batch, target_batch, model, device)
+            #sums loss for each batch
+            total_loss += loss.item()
+        else:
+            break
+    # return the average loss over all batches
+    return total_loss / num_batches
+#the following is a sample of use smaller number of batches to speed up the evaluation process during training
+device = torch.device("cude" if torch.cuda.is_available() else "cpu")
+model.to(device)
+with torch.no_grad():  # disable gradient calculation as we haven't trained the model yet
+    #the "device" setting here can ensure we load the data and LLM onto the same device, which can speed up the evalution process
+    train_loss = calc_loss_loader(train_loader, model, device)
+    val_loss = calc_loss_loader(val_loader, model, device)
+print("Training loss:", train_loss)
+print("Validation loss:", val_loss)
