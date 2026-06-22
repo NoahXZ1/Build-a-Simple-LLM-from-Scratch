@@ -249,3 +249,24 @@ train_losses, val_losses, track_tokens_seen=train_model_simple(
     model, train_loader, val_loader, optimizer, device,
     num_epochs = num_epochs, eval_freq=5, eval_iter=5,
     start_context = "Every effort moves you", tokenizer = tokenizer)
+#a plot of training and validation losses over time, helping us understand the model's learning progress and overfitting issue
+import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
+def plot_losses(epochs_seen, tokens_seen, train_losses, val_losses):
+    fig, ax1 = plt.subplots(figsize=(5,3))
+    ax1.plot(epochs_seen, train_losses, label="Training loss")
+    ax1.plot(
+        epochs_seen, val_losses, linestyle="-.", label = "Validation loss"
+    )
+    ax1.set_xlabel("Epochs")
+    ax1.set_ylabel("Loss")
+    ax1.legend(loc="upper right")
+    ax2 = ax1.twiny() # create a second x-axis that shares the same y-axis
+    ax2.plot(tokens_seen, train_losses, alpha=0)  # invisible plot to set the scale of the second x-axis
+    ax2.set_xlabel("Tokens seen")
+    fig.tight_layout()
+    plt.show()
+#the printed plot shows that overfitting has occurred, as training loss continues decrease while val loss stays around 6.5 after 2 epochs.
+# however overfitting is not a concern in this case as the val loss didn't increase significantly at the last few epochs (because training may still be in an early stage and the current validation estimate can be noisy with limited epochs/eval steps).
+epochs_tensor = torch.linspace(0, num_epochs, len(train_losses))
+plot_losses(epochs_tensor, track_tokens_seen, train_losses, val_losses)
