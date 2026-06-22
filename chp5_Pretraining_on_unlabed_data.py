@@ -169,3 +169,83 @@ with torch.no_grad():  # disable gradient calculation as we haven't trained the 
     val_loss = calc_loss_loader(val_loader, model, device)
 print("Training loss:", train_loss)
 print("Validation loss:", val_loss)
+"""-----------------------------------------5.2 Training an LLM----------------------------------------------"""
+#the main function for pretraining the llm
+def train_model_simple(model, train_loader, val_loader,
+                       optimizer, device, num_epochs,
+                       eval_freq, eval_iter, start_context, tokenizer):
+    #Initialize lists to track losses and tokens seen
+    train_losses, val_losses, track_tokens_seen = [], [], []
+    tokens_seen, global_step = 0,-1
+    #the main training loop
+    for epoch in range(num_epochs):
+        model.train()
+        for input_batch, target_batch in train_loader:
+            #this is to reset the loss gradients from previous batch iteration.
+            optimizer.zero_grad()
+            loss = calc_loss_batch(
+                input_batch, target_batch, model, device
+            )
+            #calculate loss gradients 
+            loss.backward()
+            #update model weights using loss gradients
+            optimizer.step()
+            tokens_seen += input_batch.numel()
+            #the global step is used to track the number of batches processed, whichn is useful for scheduling evaluations and logging
+            global_step +=1
+            # these are optinal evaluation steps to monitor training progress and adjust hyperparameters when necessary
+            # eval_freq determines how often to evaluate the model while eval_iter determines how many batches to use for evaluation 
+            if global_step % eval_freq == 0:
+                train_loss, val_loss = evaluate_model(
+                    model, train_loader, val_loader, device, eval_iter)
+                train_losses.append(train_loss)
+                val_losses.append(val_loss)
+                track_tokens_seen.append(tokens_seen)
+                print(f"Ep{epoch+1} (Step{global_step:06d}): "
+                      f"Train loss {train_loss:.3f},"
+                      f"Val_loss {val_loss:.3f}"
+                )
+        #print a sample text after each epoch to monitor the model's text generation capability
+        generate_and_print_sample(
+            model, tokenizer, device, start_context
+        )
+    return train_losses, val_losses, track_tokens_seen
+#the evaluate_model
+def evaluate_model(model, train_loader, val_loader, device, eval_iter):
+    # dropout is disabled during evaluation for stable, reproducible results
+    model.eval()
+    #disable gradient tracking, not required in evalution
+    with torch.no_grad():
+        train_loss = calc_loss_loader(
+            train_loader, model, device, num_batches = eval_iter
+        )
+        val_loss = calc_loss_loader(
+            val_loader, model, device, num_batches = eval_iter
+        )
+        model.train()
+        return train_loss, val_loss
+#this function takes a text snippet(start_context) as input, converts it into token IDs, and feeds it to the LLM to generate a text sample using the "generate_text_simple" function in chp4.
+def generate_and_print_sample(model, tokenizer, device, start_context):
+    model.eval()
+    context_size = model.pos_emb.weight.shape[0]
+    encoded=text_to_token_ids(start_context, tokenizer).to(device)
+    with torch.no_grad():
+        token_ids = generate_text_simple(
+            model=model, idx=encoded, 
+            max_new_tokens=50, context_size = context_size
+        )
+    decoded_text = token_ids_to_text(token_ids.cpu(), tokenizer)
+    #compact print format
+    print(decoded_text.replace("\n", " "))
+    model.train()
+# training a GPTModel instance for 10 epochs using an AdamW optimizer and the train_model_simple function we deifined eailer
+torch.manual_seed(1234)
+Model= GPTModel(GPT_CONFIG_124M)
+model.to(device)
+#lr is the learning rate paramter, controls step size at each iteration.
+optimizer = torch.optim.AdamW(model.parameters(), lr=0.0004, weight_decay=0.1) #the parameters() returns all trainable parameters of model
+num_epochs = 10
+train_losses, val_losses, track_tokens_seen=train_model_simple(
+    model, train_loader, val_loader, optimizer, device,
+    num_epochs = num_epochs, eval_freq=5, eval_iter=5,
+    start_context = "Every effort moves you", tokenizer = tokenizer)
