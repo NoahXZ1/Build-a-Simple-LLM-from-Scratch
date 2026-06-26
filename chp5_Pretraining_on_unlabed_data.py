@@ -161,7 +161,7 @@ def calc_loss_loader(data_loader, model, device, num_batches = None):
     # return the average loss over all batches
     return total_loss / num_batches
 #the following is a sample of use smaller number of batches to speed up the evaluation process during training
-device = torch.device("cude" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model.to(device)
 with torch.no_grad():  # disable gradient calculation as we haven't trained the model yet
     #the "device" setting here can ensure we load the data and LLM onto the same device, which can speed up the evalution process
@@ -240,10 +240,10 @@ def generate_and_print_sample(model, tokenizer, device, start_context):
     model.train()
 # training a GPTModel instance for 10 epochs using an AdamW optimizer and the train_model_simple function we deifined eailer
 torch.manual_seed(1234)
-Model= GPTModel(GPT_CONFIG_124M)
+model= GPTModel(GPT_CONFIG_124M)
 model.to(device)
 #the following is used to control whether to run the small model training section, which can cost much time to do.
-RUN_SMALL_MODEL_TRAINING = False
+RUN_SMALL_MODEL_TRAINING = True
 
 # Toggle this on only when you need to run the slow training section.
 if RUN_SMALL_MODEL_TRAINING:
@@ -367,3 +367,48 @@ print(new_logits)
 #apply the softmax function to turn these into next-token probs
 topk_probas = torch.softmax(new_logits, dim=0)
 print(topk_probas)
+"""-------------------------------------------5.3.3 final modified text generation function with temp scaling and top-k---------------------------------------------"""
+#the new generate text function
+def generate(model, idx, max_new_tokens, context_size, temperature=0.0, top_k=None, eos_id = None):
+    #the for loop is same as the previous one, just focus on the last token
+    for _ in range(max_new_tokens):
+        #this is to ensure the input tensor is not longer than the context size
+        idx_cond = idx[:, -context_size:]
+        with torch.no_grad():
+            logits = model(idx_cond)
+        logits = logits[:, -1, :]  # focus on the last token
+        #filters logits with top_k sampling
+        if top_k is not None:
+            top_logits, _= torch.topk(logits, top_k)
+            min_val = top_logits[:, -1]
+            logits = torch.where(
+                logits < min_val,
+                torch.tensor(float('-inf')).to(logits.device), 
+                logits
+            )
+        #apply temperature scaling
+        if temperature > 0.0:
+            logits = logits/temperature 
+            probs = torch.softmax(logits, dim=-1)
+            idx_next = torch.multinomial(probs, num_samples=1)
+        #use the previous greedy sampling method if temp scaling is not applied
+        else:
+            idx_next = torch.argmax(logits, dim=-1, keepdim=True)
+        #stop generating if the end-of-text token is generated
+        if idx_next == eos_id:
+            break
+        idx = torch.cat((idx, idx_next), dim=1)
+    return idx
+#calling the function in a sample text generation task
+torch.manual_seed(123)
+#turn the top-k smaller will make the output more focused ahd deterministic
+#when setting top_k to 1, it is equivalent to greedy sampling actually. 
+token_ids = generate(
+    model=model,
+    idx=text_to_token_ids("Every effort moves you", tokenizer),
+    max_new_tokens=15,
+    context_size = GPT_CONFIG_124M["context_length"],
+    top_k = 5,
+    temperature=1.1
+)
+print("Output text:\n", token_ids_to_text(token_ids, tokenizer))
