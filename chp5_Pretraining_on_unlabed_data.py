@@ -20,7 +20,7 @@ import tiktoken
 from ch4_Implementation_of_LLM_architecture import generate_text_simple
 
 def text_to_token_ids(text, tokenizer):
-    encoded = tokenizer.encode(text, allowed_special={'|endoftext|>'})
+    encoded = tokenizer.encode(text, allowed_special={'<|endoftext|>'})
     encoded_tensor = torch.tensor(encoded).unsqueeze(0)  #.unsqueeze(0) adds the batch dimension
     return encoded_tensor
 
@@ -127,9 +127,9 @@ print("Train loader:")
 for x, y in train_loader:
     print(x.shape, y.shape)
 
-    print("\nValidation loader:")
-    for x, y in val_loader:
-        print(x.shape, y.shape)
+print("\nValidation loader:")
+for x, y in val_loader:
+    print(x.shape, y.shape)
 #this is a utility function to calculate the loss for a batch of input and target data, given a model and device (GPU)
 def calc_loss_batch(input_batch, target_batch, model, device):
     # transfer the input and target batches to the specified device (GPU)
