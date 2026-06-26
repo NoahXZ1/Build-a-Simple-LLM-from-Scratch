@@ -351,3 +351,19 @@ ax.set_xticklabels(vocab.keys(), rotation=90)
 ax.legend()
 plt.tight_layout()
 plt.show()
+"""------------------------------------------5.3.2 Top-k sampling--------------------------------------"""
+top_k = 3
+top_logits, top_pos = torch.topk(next_token_logits, top_k)
+print("Top-k logits:", top_logits)
+print("Top positions:", top_pos)
+#apply PyTorch's where function to set the logits values of tokens that are below the lowest logit value
+new_logits = torch.where(
+    condition = next_token_logits < top_logits[-1],
+    #assign -inf to these lower logits
+    input = torch.tensor(float('-inf')),
+    other = next_token_logits
+)
+print(new_logits)
+#apply the softmax function to turn these into next-token probs
+topk_probas = torch.softmax(new_logits, dim=0)
+print(topk_probas)
