@@ -412,3 +412,25 @@ token_ids = generate(
     temperature=1.1
 )
 print("Output text:\n", token_ids_to_text(token_ids, tokenizer))
+"""------------------------------5.4 Loading and saving model weights in PyTorch---------------------------------------"""
+# use state_dict(), a dictionary object thta maps each layer to its parameter tensor, by torch.save()
+#'model.pth' is the file name to save the model weights. The .pth is a convention for PyTorch model files
+torch.save(model.state_dict(), "model.pth")
+#load the weights into a new GPTModel instace
+model = GPTModel(GPT_CONFIG_124M)
+model.load_state_dict(torch.load("model.pth", map_location=device))
+model.eval()
+#save both the model and optimizer state_dict contents:
+torch.save({
+    "model state dict": model.state_dict(),
+    "optimizer_state_dict": optimizer.state_dict(),
+    },
+    "model_and_optimizer.pth"
+)
+#restore the model and optimizer states by first loading the saved data by torch.load and load_state_dict
+checkpoint=torch.load("model_and_optimizer.pth", map_location=device)
+model=GPTModel(GPT_CONFIG_124M)
+model.load_state_dict(checkpoint["model state dict"])
+optimizer = torch.optim.AdamW(model.parameters(), lr = 5e-4, weight_decay=0.1)
+optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+model.train();
