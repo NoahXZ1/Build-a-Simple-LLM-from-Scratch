@@ -1,5 +1,43 @@
 """This is for chapter 5, "Pretraining on Unlabeled Data"""
 """-----------------------------------5.1.1 using GPT to generate text(recall of chp4)------------------------------------"""
+import os
+import sys
+import subprocess
+from pathlib import Path
+
+PROJECT_DIR = Path(__file__).resolve().parent
+PREFERRED_PYTHON = PROJECT_DIR / ".venv311" / "Scripts" / "python.exe"
+FALLBACK_PYTHON311 = Path(r"D:\Program Files\python311\python.exe")
+
+for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+        stream.reconfigure(encoding="utf-8", errors="replace")
+
+def rerun_with_python(python_exe):
+    env = os.environ.copy()
+    env.setdefault("PYTHONUNBUFFERED", "1")
+    env.setdefault("PYTHONIOENCODING", "utf-8")
+    result = subprocess.run(
+        [str(python_exe), str(Path(__file__).resolve()), *sys.argv[1:]],
+        cwd=str(PROJECT_DIR),
+        env=env,
+    )
+    raise SystemExit(result.returncode)
+
+
+if PREFERRED_PYTHON.exists() and Path(sys.executable).resolve() != PREFERRED_PYTHON.resolve():
+    rerun_with_python(PREFERRED_PYTHON)
+elif sys.version_info[:2] != (3, 11) and FALLBACK_PYTHON311.exists():
+    rerun_with_python(FALLBACK_PYTHON311)
+
+if sys.version_info[:2] != (3, 11):
+    raise RuntimeError("Please run this script with Python 3.11.")
+
+os.chdir(PROJECT_DIR)
+MPL_CONFIG_DIR = PROJECT_DIR / "matplotlib_cache"
+MPL_CONFIG_DIR.mkdir(exist_ok=True)
+os.environ.setdefault("MPLCONFIGDIR", str(MPL_CONFIG_DIR))
+
 import torch
 from ch4_Implementation_of_LLM_architecture import GPTModel
 
@@ -243,7 +281,7 @@ torch.manual_seed(1234)
 model= GPTModel(GPT_CONFIG_124M)
 model.to(device)
 #the following is used to control whether to run the small model training section, which can cost much time to do.
-RUN_SMALL_MODEL_TRAINING = True
+RUN_SMALL_MODEL_TRAINING = False
 
 # Toggle this on only when you need to run the slow training section.
 if RUN_SMALL_MODEL_TRAINING:
@@ -421,12 +459,13 @@ model = GPTModel(GPT_CONFIG_124M)
 model.load_state_dict(torch.load("model.pth", map_location=device))
 model.eval()
 #save both the model and optimizer state_dict contents:
-torch.save({
-    "model state dict": model.state_dict(),
-    "optimizer_state_dict": optimizer.state_dict(),
-    },
-    "model_and_optimizer.pth"
-)
+if RUN_SMALL_MODEL_TRAINING:
+    torch.save({
+        "model state dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        },
+        "model_and_optimizer.pth"
+    )
 #restore the model and optimizer states by first loading the saved data by torch.load and load_state_dict
 checkpoint=torch.load("model_and_optimizer.pth", map_location=device)
 model=GPTModel(GPT_CONFIG_124M)
@@ -434,3 +473,21 @@ model.load_state_dict(checkpoint["model state dict"])
 optimizer = torch.optim.AdamW(model.parameters(), lr = 5e-4, weight_decay=0.1)
 optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
 model.train();
+"""---------------------------------5.5 Loading pretrained weights from OpenAI------------------------------------"""
+import sys
+print(sys.executable)
+#download gpt_download.py from the LLM book's repository
+import urllib.request
+url = (
+    "https://raw.githubusercontent.com/rasbt/"
+    "LLMs-from-scratch/main/ch05/"
+    "01_main-chapter-code/gpt_download.py"
+)
+filename = PROJECT_DIR / url.split('/')[-1]
+if not filename.exists():
+    urllib.request.urlretrieve(url, filename)
+#import the download_and_load_gpt2 function from gpt_download.py which will load the GPT-2 architecture settings and weight parameters into our python session
+from gpt_download import download_and_load_gpt2
+settings, params = download_and_load_gpt2(
+    model_size="124M", models_dir= "gpt2"
+)

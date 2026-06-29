@@ -1,5 +1,11 @@
 .venv/
+.venv311/
 .tmp/
 .vscode/
 __pycache__/
+gpt2/
+matplotlib_cache/
+.matplotlib/
+gpt_download.py
+*.pth
 *.pyc
