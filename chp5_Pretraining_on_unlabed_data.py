@@ -281,7 +281,7 @@ torch.manual_seed(1234)
 model= GPTModel(GPT_CONFIG_124M)
 model.to(device)
 #the following is used to control whether to run the small model training section, which can cost much time to do.
-RUN_SMALL_MODEL_TRAINING = False
+RUN_SMALL_MODEL_TRAINING = True
 
 # Toggle this on only when you need to run the slow training section.
 if RUN_SMALL_MODEL_TRAINING:
@@ -590,3 +590,17 @@ def load_weights_into_gpt(gpt, params):
     gpt.final_norm.scale = assign(gpt.final_norm.scale, params["g"])
     gpt.final_norm.shift = assign(gpt.final_norm.shift, params["b"])
     gpt.out_head.weight = assign(gpt.out_head.weight, params["wte"])
+#using load_weights_into_gpt to load the OpenAI model weights into our GPTModel instance model
+load_weights_into_gpt(gpt, params)
+gpt.to(device)
+#generate new text using the previous generate function if the model is loaded successfully
+torch.manual_seed(123)
+token_ids=generate(
+    model=gpt,
+    idx=text_to_token_ids("Every effort moves you", tokenizer).to(device),
+    max_new_tokens = 25,
+    context_size=NEW_CONFIG["context_length"],
+    top_k = 50,
+    temperature = 1.5
+)
+print("Output text:\n", token_ids_to_text(token_ids, tokenizer))
