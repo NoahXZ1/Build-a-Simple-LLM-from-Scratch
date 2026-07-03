@@ -41,3 +41,38 @@ df = pd.read_csv(data_file_path, sep="\t", header=None, names=["Label", "Text"])
 df
 #examine the class label distribution
 print(df["Label"].value_counts())
+#creating a balanced dataset
+def create_balanced_dataset(df):
+    #count the instances of "spam"
+    num_spam = df[df["Label"]=="spam"].shape[0]
+    #randomly sample the same number of "ham" instances to match the number of "spam" instances
+    ham_subset = df[df["Label"]=="ham"].sample(n=num_spam, random_state=123)
+    #combines ham subset with "spam"
+    balanced_df = pd.concat([ham_subset, df[df["Label"] == "spam"]])
+    return balanced_df
+
+balanced_df = create_balanced_dataset(df)
+print(balanced_df["Label"].value_counts())
+#convert the labels to binary values, where ham is 0 and spam is 1
+balanced_df["Label"] = balanced_df["Label"].map({"ham": 0, "spam": 1})
+
+#split the dataset (70% training, 10% validation, 20% testing)
+def random_split(df, train_frac, validation_frac):
+    #shuffles the entire DataFrame
+    df = df.sample(frac = 1, random_state=123).reset_index(drop=True)
+    #calculating split indices based on the specified fracs
+    train_end = int(len(df)*train_frac)
+    validation_end = train_end + int(len(df)*validation_frac)
+    #splits the DataFrame into training, validation, and testing sets
+    train_df = df[:train_end]
+    validation_df = df[train_end:validation_end]
+    test_df = df[validation_end:]
+
+    return train_df, validation_df, test_df
+#test size is implied to be 20% as remainder
+train_df, validation_df, test_df = random_split(balanced_df, 0.7, 0.1)
+
+#save the datasets as CSV
+train_df.to_csv("train.csv", index=None)
+validation_df.to_csv("validation.csv", index=None)
+test_df.to_csv("test.csv", index=None)
