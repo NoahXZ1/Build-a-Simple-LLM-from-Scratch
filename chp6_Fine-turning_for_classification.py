@@ -34,3 +34,10 @@ def download_and_unzip_spam_data(
 
 download_and_unzip_spam_data(url, zip_path, extracted_path, data_file_path)
 #previous code will download the dataset and save it as SMSSpamCollection.tsv in the sms_spam_collection folder.
+#load it into a pandas dataframe
+import pandas as pd
+df = pd.read_csv(data_file_path, sep="\t", header=None, names=["Label", "Text"])
+#renders the data frame in a Jupyter notebook. Alternatively, using print(df)
+df
+#examine the class label distribution
+print(df["Label"].value_counts())
