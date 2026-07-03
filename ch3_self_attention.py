@@ -297,7 +297,7 @@ class MultiHeadAttention(nn.Module):
         #masks truncated to the number of tokens in the input sequence.
         mask_bool = self.mask.bool()[:num_tokens, :num_tokens]
         #use the mask to fill the scores of future tokens
-        attn_scores.masked_fill(mask_bool, -torch.inf)
+        attn_scores = attn_scores.masked_fill(mask_bool, -torch.inf)
         #as previous, compute the attention weights by softmax function and apply random dropout to attention weights
         attn_weights=torch.softmax(attn_scores / keys.shape[-1]**0.5, dim=-1)
         attn_weights =self.dropout(attn_weights)

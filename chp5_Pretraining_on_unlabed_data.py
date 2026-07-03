@@ -517,16 +517,17 @@ gpt=GPTModel(NEW_CONFIG)
 gpt.eval()
 #define a small assign utility function that checks whether two tensors or arrays (left and right)
 def assign(left, right):
+    right = torch.as_tensor(right, dtype=left.dtype, device=left.device)
     if left.shape != right.shape:
         raise ValueError(f"Shape mismatch. Left: {left.shape}, "
-                          "Right: {right.shape}"
+                          f"Right: {right.shape}"
         )
-    return torch.nn.Parameter(torch.tensor(right))
+    return torch.nn.Parameter(right.clone().detach())
 #define a load_weights_into_gpt function
 import numpy as np
 def load_weights_into_gpt(gpt, params):
-    gpt.pos_emb_weight = assign(gpt.pos_emb.weight, params['wpe'])
-    gpt.tok_emb_weight = assign(gpt.tok_emb.weight, params['wte'])
+    gpt.pos_emb.weight = assign(gpt.pos_emb.weight, params['wpe'])
+    gpt.tok_emb.weight = assign(gpt.tok_emb.weight, params['wte'])
 
     for b in range(len(params["blocks"])):
         q_w, k_w, v_w = np.split(
@@ -590,8 +591,21 @@ def load_weights_into_gpt(gpt, params):
     gpt.final_norm.scale = assign(gpt.final_norm.scale, params["g"])
     gpt.final_norm.shift = assign(gpt.final_norm.shift, params["b"])
     gpt.out_head.weight = assign(gpt.out_head.weight, params["wte"])
+
+
+def verify_gpt2_embeddings_loaded(gpt, params):
+    checks = {
+        "tok_emb.weight": (gpt.tok_emb.weight, params["wte"]),
+        "pos_emb.weight": (gpt.pos_emb.weight, params["wpe"]),
+        "out_head.weight": (gpt.out_head.weight, params["wte"]),
+    }
+    for name, (loaded, expected) in checks.items():
+        expected = torch.as_tensor(expected, dtype=loaded.dtype)
+        if not torch.equal(loaded.detach().cpu(), expected):
+            raise RuntimeError(f"GPT-2 weight load check failed for {name}")
 #using load_weights_into_gpt to load the OpenAI model weights into our GPTModel instance model
 load_weights_into_gpt(gpt, params)
+verify_gpt2_embeddings_loaded(gpt, params)
 gpt.to(device)
 #generate new text using the previous generate function if the model is loaded successfully
 torch.manual_seed(123)
@@ -604,3 +618,11 @@ token_ids=generate(
     temperature = 1.5
 )
 print("Output text:\n", token_ids_to_text(token_ids, tokenizer))
+#Exe 5.6: calculating the loss for the loaded GPT-2 model on the training and validation datasets
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model.to(device)
+with torch.no_grad():
+    train_loss = calc_loss_loader(train_loader, gpt, device)
+    val_loss = calc_loss_loader(val_loader, gpt, device)
+print("Training loss of loaded GPT-2 model:", train_loss)
+print("Validation loss of loaded GPT-2 model:", val_loss)
