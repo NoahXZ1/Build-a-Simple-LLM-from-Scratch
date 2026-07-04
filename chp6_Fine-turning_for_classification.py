@@ -136,3 +136,33 @@ print(train_dataset.max_length)
 #then pad the validation and test datasets to the same length as the training dataset
 val_dataset = SpamDataset(csv_file = "validation.csv", max_length = train_dataset.max_length, tokenizer = tokenizer)
 test_dataset = SpamDataset(csv_file = "test.csv", max_length = train_dataset.max_length, tokenizer = tokenizer)
+#creates the training, validation, and test data loaders that load the text messages and labels in batches of size 8
+from torch.utils.data import DataLoader
+
+#ensure compaptility with most computers
+num_workers = 0
+batch_size = 8
+torch.manual_seed(123)
+
+train_loader = DataLoader(
+    dataset = train_dataset, batch_size = batch_size, shuffle = True, num_workers=num_workers, drop_last = True
+)
+val_loader = DataLoader(
+    dataset = val_dataset, batch_size = batch_size, num_workers = num_workers, drop_last = False
+)
+test_loader = DataLoader(
+    dataset = test_dataset, batch_size = batch_size, num_workers = num_workers, drop_last = False
+)
+# Iterate through every batch to confirm the whole train_loader can be consumed
+# without errors (catches shape/collation issues in any batch, not just the first).
+# The loop body is empty on purpose: we only care about exhausting the iterator.
+# input_batch/target_batch are created by tuple-unpacking each yielded batch, and
+# Python has no block scope, so after the loop they still hold the LAST batch's values.
+for input_batch, target_batch in train_loader:
+    pass
+print("Input batch dimensions:", input_batch.shape)
+print("Label batch dimensions:", target_batch.shape)
+#the total number of batches showing the dataset size
+print(f"{len(train_loader)} training batches")
+print(f"{len(val_loader)} validation batches")
+print(f"{len(test_loader)} test batches")
