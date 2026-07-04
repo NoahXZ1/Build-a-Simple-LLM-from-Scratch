@@ -212,3 +212,37 @@ text_2 = (
 )
 token_ids = generate_text_simple(model=model, idx=text_to_token_ids(text_2, tokenizer),max_new_tokens=23, context_size =BASE_CONFIG["context_length"])
 print(token_ids_to_text(token_ids, tokenizer))
+
+"""-------------------------------6.5 Adding a classification head---------------------------------"""
+# print the model architecture before adding the classification head
+print(model)
+#freeze the model to get the model ready fro classification fine-tuning
+for param in model.parameters():
+    param.requires_grad = False
+#add a classification layer
+torch.manual_seed(123)
+num_classes = 2
+model.out_head = torch.nn.Linear(
+    #we use emb_dim of GPT2 as the input dimension to make it more generalizable, so we can
+    #use the same classify head with differnt GPT2 model sizes
+    in_features = BASE_CONFIG["emb_dim"],
+    out_features = num_classes
+)
+#set the requires_grad of LayerNorm and last transformer block to True to make them trainable
+for param in model.trf_blocks[-1].parameters():
+    param.requires_grad = True
+for param in model.final_norm.parameters():
+    param.requires_grad = True
+#feed it an example text identical to our previously used example text:
+inputs = tokenizer.encode("Do you have time")
+inputs = torch.tensor(inputs).unsqueeze(0)  # Add batch dimension
+print("Inputs:", inputs)
+print("Inputs dimensions:", inputs.shape) #shape:[batch_size, num_tokens]
+
+#Then we pass the encoded token IDs to the model as usual
+with torch.no_grad():
+    outputs = model(inputs)
+print("Outputs:\n", outputs)
+print("Outputs dimensions:", outputs.shape)
+#use the following code to extract the last output token from then output tensor
+print("Last output token:", outputs[:, -1, :])
