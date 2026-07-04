@@ -131,3 +131,8 @@ class SpamDataset(Dataset):
         return max_length   
 #create the batches in the training data loader
 train_dataset = SpamDataset("train.csv", max_length = None, tokenizer = tokenizer)
+
+print(train_dataset.max_length)
+#then pad the validation and test datasets to the same length as the training dataset
+val_dataset = SpamDataset(csv_file = "validation.csv", max_length = train_dataset.max_length, tokenizer = tokenizer)
+test_dataset = SpamDataset(csv_file = "test.csv", max_length = train_dataset.max_length, tokenizer = tokenizer)
