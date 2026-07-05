@@ -261,3 +261,73 @@ def calc_accuracy_loader(data_loader, model, device, num_batches = None):
         num_batches = len(data_loader)
     else:
         num_batches = min(num_batches, len(data_loader))
+    for i, (input_batch, target_batch) in enumerate(data_loader):
+        if i < num_batches:
+            input_batch = input_batch.to(device)
+            target_batch = target_batch.to(device)
+
+            with torch.no_grad():
+                logits = model(input_batch)[:, -1, :] #logits of last output token
+            predicted_labels = torch.argmax(logits, dim=-1)
+
+            num_examples +=predicted_labels.shape[0]
+            correct_predictions += (
+                (predicted_labels == target_batch).sum().item()
+            )
+        
+        else:
+            break
+    return correct_predictions / num_examples
+#use the calc_accuracy_loader function to calculate the accuracy of the model on the validation dataset
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model.to(device)
+
+torch.manual_seed(123)
+train_accuracy = calc_accuracy_loader(train_loader, model, device, num_batches=10)
+val_accuracy = calc_accuracy_loader(val_loader, model, device, num_batches=10)
+test_accuracy = calc_accuracy_loader(test_loader, model, device, num_batches=10)
+
+print(f"Traning accuracy: {train_accuracy*100:.2f}%")
+print(f"Validation accuracy: {val_accuracy*100:.2f}%")
+print(f"Test accuracy: {test_accuracy*100:.2f}%")
+
+#define the loss function
+#because we are dealing with a binary classification problem, we cannot use accuracy as the loss function, as it is not differentiable
+#we use the cross-entropy instead, which measures the confidence of the model's predictions, penalizing incorrect predictions, so its differentiable
+
+#and we only calculate the loss for last output token, which contains all tokens' information
+def calc_loss_batch(input_batch, target_batch, model, device):
+    input_batch = input_batch.to(device)
+    target_batch = target_batch.to(device)
+    logits = model(input_batch)[:,-1,:] # logits of last output token
+
+    loss = torch.nn.functional.cross_entropy(logits, target_batch)
+    return loss
+#calc_loss_batch is only for a single batch
+#we use calc_loss_loader to calculate the loss for all batches in the dataloader
+def calc_loss_loader(data_loader, model, device, num_batches = None):
+    total_loss = 0.
+    if len(data_loader) == 0:
+        return float("nan")
+    elif num_batches is None:
+        num_batches = len(data_loader)
+    
+    else: # ensure the number of batches doesn't exceed batches in data loader
+        num_batches = min(num_batches, len(data_loader))
+    for i, (input_batch, target_batch) in enumerate(data_loader):
+        if i < num_batches:
+            loss =  calc_loss_batch(input_batch, target_batch, model, device)
+            total_loss += loss.item() # detach from computation graph to avoid memory buildup
+        else:
+            break
+    return total_loss / num_batches
+# compute initial loss for each dataset
+with torch.no_grad():
+    train_loss = calc_loss_loader(
+        train_loader, model, device, num_batches = 5
+    )
+    val_loss = calc_loss_loader(val_loader, model, device, num_batches = 5)
+    test_loss = calc_loss_loader(test_loader, model, device, num_batches = 5)
+print(f"Initial training loss: {train_loss:.3f}")
+print(f"Initial validation loss: {val_loss:.3f}")
+print(f"Initial test loss: {test_loss:.3f}")

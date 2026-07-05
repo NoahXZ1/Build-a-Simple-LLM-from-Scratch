@@ -281,7 +281,9 @@ torch.manual_seed(1234)
 model= GPTModel(GPT_CONFIG_124M)
 model.to(device)
 #the following is used to control whether to run the small model training section, which can cost much time to do.
-RUN_SMALL_MODEL_TRAINING = True
+RUN_SMALL_MODEL_TRAINING = False
+#the following is used to control whether to display the matplotlib figures produced in this script.
+RUN_PLOTTING = False
 
 # Toggle this on only when you need to run the slow training section.
 if RUN_SMALL_MODEL_TRAINING:
@@ -313,8 +315,8 @@ def plot_losses(epochs_seen, tokens_seen, train_losses, val_losses):
     plt.show()
 #the printed plot shows that overfitting has occurred, as training loss continues decrease while val loss stays around 6.5 after 2 epochs.
 # however overfitting is not a concern in this case as the val loss didn't increase significantly at the last few epochs (because training may still be in an early stage and the current validation estimate can be noisy with limited epochs/eval steps).
-#only draw the plot when small model is trained.
-if RUN_SMALL_MODEL_TRAINING:
+#only draw the plot when small model is trained and plotting is enabled.
+if RUN_SMALL_MODEL_TRAINING and RUN_PLOTTING:
     epochs_tensor = torch.linspace(0, num_epochs, len(train_losses))
     plot_losses(epochs_tensor, track_tokens_seen, train_losses, val_losses)
 """-----------------------------------------5.3 Decoding Stratergies to Control Randomness--------------------------------------"""
@@ -378,17 +380,18 @@ scaled_probas = [softmax_with_temperature(next_token_logits, T)
 #Exe5.1: shows the sampled tokens for each temperature setting
 for j in range(len(temperatures)):
     print_sampled_tokens(scaled_probas[j])
-x = torch.arange(len(vocab))
-bar_width = 0.15
-fig, ax = plt.subplots(figsize = (5,3))
-for i, T in enumerate(temperatures):
-    rects = ax.bar(x+i*bar_width, scaled_probas[i], bar_width, label=f'Temperature={T}')
-ax.set_ylabel('Probability')
-ax.set_xticks(x)
-ax.set_xticklabels(vocab.keys(), rotation=90)
-ax.legend()
-plt.tight_layout()
-plt.show()
+if RUN_PLOTTING:
+    x = torch.arange(len(vocab))
+    bar_width = 0.15
+    fig, ax = plt.subplots(figsize = (5,3))
+    for i, T in enumerate(temperatures):
+        rects = ax.bar(x+i*bar_width, scaled_probas[i], bar_width, label=f'Temperature={T}')
+    ax.set_ylabel('Probability')
+    ax.set_xticks(x)
+    ax.set_xticklabels(vocab.keys(), rotation=90)
+    ax.legend()
+    plt.tight_layout()
+    plt.show()
 """------------------------------------------5.3.2 Top-k sampling--------------------------------------"""
 top_k = 3
 top_logits, top_pos = torch.topk(next_token_logits, top_k)
