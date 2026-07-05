@@ -246,3 +246,18 @@ print("Outputs:\n", outputs)
 print("Outputs dimensions:", outputs.shape)
 #use the following code to extract the last output token from then output tensor
 print("Last output token:", outputs[:, -1, :])
+"""--------------------------------6.6 calculating the loss for classification---------------------------------"""
+#obtain the class label of last token:
+logits = outputs[:,-1,:] 
+label = torch.argmax(logits)
+print("Class label:", label.item())
+
+#calculate the classification accruracy
+def calc_accuracy_loader(data_loader, model, device, num_batches = None):
+    model.eval()
+    correct_predictions, num_examples = 0, 0
+
+    if num_batches is None:
+        num_batches = len(data_loader)
+    else:
+        num_batches = min(num_batches, len(data_loader))
