@@ -399,3 +399,30 @@ train_losses, val_losses, train_accs, val_accs, examples_seen = \
 end_time =time.time()
 execution_time_minutes = (end_time - start_time) / 60
 print(f"Training completed in {execution_time_minutes:.2f} minutes.")
+
+#Then we use Matplotlib to plot the loss function for the training and validation set
+import matplotlib.pyplot as plt
+
+def plot_values(
+        epochs_seen, examples_seen, train_values, val_values, label="loss"):
+    fig, ax1 = plt.subplots(figsize=(5,3))
+    #Plots training and validation loss against epochs
+    ax1.plot(epochs_seen, train_values, label=f"Training {label}")
+    ax1.plot(epochs_seen, val_values, linestyle="-.", label=f"Validation {label}")
+    ax1.set_xlabel("Epochs")
+    ax1.set_ylabel(label.capitalize())
+    ax1.legend()
+    #creates a second x-axis for examples seen
+    ax2 = ax1.twiny()
+    #invisible plot for aligning ticks
+    ax2.plot(examples_seen, train_values, alpha=0)
+    ax2.set_xlabel("Examples seen")
+    #Adjusts layout to make room
+    fig.tight_layout()
+    plt.savefig(f"{label}-plot.pdf")
+    plt.show()
+
+epochs_tensor = torch.linspace(0, num_epochs, len(train_losses))
+examples_seen_tensor = torch.linspace(0, examples_seen, len(train_losses))
+
+plot_values(epochs_tensor, examples_seen_tensor, train_losses, val_losses)
