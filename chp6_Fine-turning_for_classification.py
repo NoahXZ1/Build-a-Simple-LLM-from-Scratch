@@ -331,3 +331,71 @@ with torch.no_grad():
 print(f"Initial training loss: {train_loss:.3f}")
 print(f"Initial validation loss: {val_loss:.3f}")
 print(f"Initial test loss: {test_loss:.3f}")
+"""-------------------------------6.7 Fine-tuning the model for classfication----------------------------"""
+#function used for training the model for classification fine-tuning
+def train_classifier_simple(
+        model, train_loader, val_loader, optimizer, device, num_epochs, eval_freq, eval_iter):
+    #initialize lists to trach losses and examples seen
+    train_losses, val_losses, train_accs, val_accs = [], [], [], []
+    examples_seen, global_step = 0,-1
+
+    #main training loop
+    for epoch in range(num_epochs):
+        #sets model to training mode
+        model.train()
+
+        for input_batch, target_batch in train_loader:
+            #reset loss gradients from the previous batch iteration
+            optimizer.zero_grad()
+            loss = calc_loss_batch(input_batch, target_batch, model, device)
+            #calculate loss gradients for the model parameters
+            loss.backward()
+            #updates model weights using loss gradients
+            optimizer.step()
+            #New part: tracks examples instead of tokens
+            examples_seen += input_batch.shape[0]
+            global_step += 1
+            #Optional: evaluate the model on the training and validation datasets at specified intervals
+            if global_step % eval_freq == 0:
+                train_loss, val_loss = evaluate_model(model, train_loader, val_loader, device, eval_iter)
+                train_losses.append(train_loss)
+                val_losses.append(val_loss)
+                print(f"Ep {epoch+1} (Step {global_step:06d}): "
+                      f"Train loss {train_loss:.3f}, "
+                      f"Val loss {val_loss:.3f}"
+                )
+        #calculate the accuracy after each epoch
+        train_accuracy = calc_accuracy_loader(train_loader, model, device, num_batches = eval_iter)
+        val_accuracy = calc_accuracy_loader(val_loader, model, device, num_batches =eval_iter)
+
+        print(f"Training accuracy: {train_accuracy*100:.2f}% | ", end="")
+        print(f"Validation accuracy: {val_accuracy*100:.2f}%")
+        train_accs.append(train_accuracy)
+        val_accs.append(val_accuracy)
+
+    return train_losses, val_losses, train_accs, val_accs, examples_seen
+#the evaluate_model is same as what we used before for pretraining
+def evaluate_model(model, train_loader, val_loader, device, eval_iter):
+    model.eval()
+    with torch.no_grad():
+        train_loss = calc_loss_loader(train_loader, model, device, num_batches = eval_iter)
+        val_loss = calc_loss_loader(val_loader, model, device, num_batches = eval_iter)
+        model.train()#return the model to training mode after evaluation
+        return train_loss, val_loss
+
+#initialize the optimizer, set the number of epochs and initialize the training using train_classifier_simple_function
+import time
+
+start_time = time.time()
+torch.manual_seed(123)
+optimizer = torch.optim.AdamW(model.parameters(), lr = 5e-5, weight_decay = 0.1)
+num_epochs =5
+
+train_losses, val_losses, train_accs, val_accs, examples_seen = \
+    train_classifier_simple(
+        model, train_loader, val_loader, optimizer, device, num_epochs=num_epochs, eval_freq = 50, eval_iter = 5
+    )
+
+end_time =time.time()
+execution_time_minutes = (end_time - start_time) / 60
+print(f"Training completed in {execution_time_minutes:.2f} minutes.")
