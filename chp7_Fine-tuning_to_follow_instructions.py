@@ -17,7 +17,7 @@ def download_and_load_file(file_path, url):
 file_path = "instruction_data.json"
 url = (
     "https://raw.githubusercontent.com/rasbt/LLMs-from-scratch"
-    "/main/ch07/01_main_chapter_code/instruction_data.json"
+    "/main/ch07/01_main-chapter-code/instruction-data.json"
 )
 
 data = download_and_load_file(file_path, url)
