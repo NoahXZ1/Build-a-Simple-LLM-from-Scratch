@@ -2,7 +2,7 @@
 #7.2 Preparing a dataset for supervised fine-tuning instruction fine-tuning
 import json
 import os
-import urllib
+import urllib.request
 
 def download_and_load_file(file_path, url):
     if not os.path.exists(file_path):
@@ -15,3 +15,10 @@ def download_and_load_file(file_path, url):
     return data
 
 file_path = "instruction_data.json"
+url = (
+    "https://raw.githubusercontent.com/rasbt/LLMs-from-scratch"
+    "/main/ch07/01_main_chapter_code/instruction_data.json"
+)
+
+data = download_and_load_file(file_path, url)
+print("Number of entries:", len(data))
