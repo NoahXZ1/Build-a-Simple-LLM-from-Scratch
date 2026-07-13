@@ -43,3 +43,20 @@ def format_input(entry):
 model_input = format_input(data[50])
 desired_response = f"\n\n### Response:\n{data[50]['output']}"
 print(model_input + desired_response)
+#test using data[999] (###input is empty)
+model_input = format_input(data[999])
+desired_response = f"\n\n### Response:\n{data[999]['output']}"
+print(model_input + desired_response)
+
+#Partitioning the dataset, (split it to training, validation and test sets)
+train_portion = int(len(data)*0.85)  #85% data for training
+test_portion = int(len(data)*0.10)  #10% data for testing
+val_portion = len(data) - train_portion - test_portion  #5% data for validation
+
+train_data = data[:train_portion]
+test_data = data[train_portion:train_portion + test_portion]
+val_data = data[train_portion + test_portion:]
+
+print("Training set length: ", len(train_data))
+print("Validation set length: ", len(val_data))
+print("Test set length: ", len(test_data))
