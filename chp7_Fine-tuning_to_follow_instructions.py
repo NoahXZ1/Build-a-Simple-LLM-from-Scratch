@@ -22,3 +22,24 @@ url = (
 
 data = download_and_load_file(file_path, url)
 print("Number of entries:", len(data))
+#the data list loaded froM json file contains 1100 entries of instruction dataset
+print("Example entry:\n", data[50])
+
+#another entry, showing the 'input' field maybe empty
+print("Another example entry:\n", data[999])
+#define the function to convert the entries in the data list into the Alpaca-style input
+
+def format_input(entry):
+    instruction_text = (
+        f"Below is an instruction that describes a task. "
+        f"Write a response that appropriately completes the request. "
+        f"\n\n### Instrcution:\n{entry['instruction']}"
+    )
+
+    input_text = ( f"\n\n### Input:\n{entry['input']}" if entry["input"] else "")
+    
+    return instruction_text + input_text
+#make a test using data[50]
+model_input = format_input(data[50])
+desired_response = f"\n\n### Response:\n{data[50]['output']}"
+print(model_input + desired_response)
