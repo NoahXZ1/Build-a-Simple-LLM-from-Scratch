@@ -60,3 +60,78 @@ val_data = data[train_portion + test_portion:]
 print("Training set length: ", len(train_data))
 print("Validation set length: ", len(val_data))
 print("Test set length: ", len(test_data))
+
+"""------------------------------7.3 organizing data into training dataset----------------------------"""
+#implement a instruction dataset class
+#the class is used to implement format_input(formatting the input data) and pretokenize all inputs in the dataset
+import torch
+from torch.utils.data import  Dataset
+class InstructionDataset(Dataset):
+    def __init__(self, data, tokenizer):
+        self.data = data
+        self.encoded_texts = []
+        #pretokenize all the inputs in the dataset
+        for entry in self.data:
+            instruction_plus_input = format_input(entry)
+            response_text = f"\n\n### Response:\n{entry['output']}"
+            full_text = instruction_plus_input + response_text
+            self.encoded_texts.append(tokenizer.encode(full_text))
+    
+    def __getitem__(self, index):
+        return self.encoded_texts[index]
+    
+    def __len__(self):
+        return len(self.data)
+#2.3: then we should padding the encoded texts to the same length
+#using the token ID of <|endoftext> directly, which is 50256 for GPT2 tokenizer
+import tiktoken
+tokenizer = tiktoken.get_encoding("gpt2")
+print(tokenizer.encode("<|endoftext|>", allowed_special={"<|endoftext|>"}))
+#implement the custom collate function to pad the encoded texts to the same length
+def custom_collate_draft_1(batch, pad_token_id=50256, device="cpu"):
+    #finds the longest sequence in the batch
+    batch_max_length = max(len(item)+1 for item in batch)
+    inputs_lst = []
+
+    for item in batch:  #pads and prepares inputs for each item in the batch
+        new_item = item.copy()
+        new_item += [pad_token_id]
+
+        padded = (new_item + [pad_token_id] * (batch_max_length - len(new_item)))
+        #removes extra padded token added earlier
+        inputs = torch.tensor(padded[:-1])
+        inputs_lst.append(inputs)
+    #convert the list of inputs to a tensor and transfer it to the target device
+    inputs_tensor = torch.stack(inputs_lst).to(device)
+    return inputs_tensor
+#test the custom collate function
+inputs_1 = [0,1,2,3,4]
+inputs_2 = [5,6]
+inputs_3 = [7,8,9]
+batch = (inputs_1, inputs_2, inputs_3)
+print(custom_collate_draft_1(batch))
+
+#step2.4: create a list of target token IDs for the model to learn
+#get the target token IDs by shifting the input token IDs to the right by 1 position, and the last token ID is set to the pad_token_id
+def custom_collate_draft_2(batch, pad_token_id=50256, device="cpu"):
+    batch_max_length = max(len(item)+1 for item in batch)
+    inputs_lst, targets_lst = [],[]
+
+    for item in batch:
+        new_item = item.copy()
+        new_item += [pad_token_id]
+        padded = (new_item + [pad_token_id] * (batch_max_length - len(new_item)))
+        #truncates the last token ID for inputs 
+        inputs = torch.tensor(padded[:-1])
+        #shifts the input token IDs to the right by 1 position for targets
+        targets = torch.tensor(padded[1:])
+        inputs_lst.append(inputs)
+        targets_lst.append(targets)
+    
+    inputs_tensor = torch.stack(inputs_lst).to(device)
+    targets_tensor = torch.stack(targets_lst).to(device)
+    return inputs_tensor, targets_tensor
+
+inputs, targets = custom_collate_draft_2(batch)
+print(inputs)
+print(targets)
