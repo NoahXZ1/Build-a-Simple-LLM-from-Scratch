@@ -150,7 +150,8 @@ def custom_collate_fn(batch, pad_token_id=50256,ignore_index=-100, allowed_max_l
         #shifts +1 to the right for taregst
         targets = torch.tensor(padded[1:])
         #replaces all but the first padding tokens in targets by ignore_index
-        mask=targets == pad_token_id
+        #mask is a boolean tensor which has the same shape as targets, where each element is True if the corresponding element in targets is equal to pad_token_id, and False otherwise.
+        mask=targets == pad_token_id  
         indices = torch.nonzero(mask).squeeze()
         if indices.numel() > 1:
             targets[indices[1:]] = ignore_index
@@ -169,3 +170,18 @@ def custom_collate_fn(batch, pad_token_id=50256,ignore_index=-100, allowed_max_l
 inputs, targets = custom_collate_fn(batch)
 print(inputs)
 print(targets)
+#an example of calculating the loss
+logits_1 = torch.tensor([[-1.0, 1.0], [-0.5, 1.5]]) #prediction for 1st and 2nd token in the sequence
+targets_1 = torch.tensor([0,1])  #Correct target token indices to generate
+loss_1 = torch.nn.functional.cross_entropy(logits_1, targets_1)
+print(loss_1)
+#demostration: adding additional token ID will affects the loss calculation
+logits_2 = torch.tensor([[-1.0, 1.0], [-0.5, 1.5], [-0.5, 1.5]])
+targets_2 = torch.tensor([0,1,1])  #the last token ID is set to -100, which will be ignored in the loss calculation
+loss_2 = torch.nn.functional.cross_entropy(logits_2, targets_2)
+print(loss_2)
+#replace the third token ID with -100:
+targets_3 = torch.tensor([0,1,-100])  #the last token ID is set to -100, which will be ignored in the loss calculation
+loss_3 = torch.nn.functional.cross_entropy(logits_2, targets_3)
+print(loss_3)
+print("loss_1 == loss_3:", loss_1 == loss_3)
