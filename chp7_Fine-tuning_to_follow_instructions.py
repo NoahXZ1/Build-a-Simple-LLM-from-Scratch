@@ -185,3 +185,36 @@ targets_3 = torch.tensor([0,1,-100])  #the last token ID is set to -100, which w
 loss_3 = torch.nn.functional.cross_entropy(logits_2, targets_3)
 print(loss_3)
 print("loss_1 == loss_3:", loss_1 == loss_3)
+
+"""------------------------------7.4 Creating data loaders for training and evaluation----------------------------"""
+#initialize the device variable to use GPU if available, otherwise use CPU
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# if torch.backends.mps.is_available(): (for macOS)
+#     device = torch.device("mps")
+print("Device:", device)
+#create a new version of the function with the device argument prefilled by the partial function from the functools module
+from functools import partial
+
+customized_collate_fn = partial( custom_collate_fn, device = device, allowed_max_length = 1024)
+#set up the dataloaders using custom collate function for batching process
+from torch.utils.data import DataLoader
+
+#Windows needs `if __name__ == "__main__":` guard for multiprocessing DataLoader; this script lacks it, so keep 0
+num_workders = 0
+batch_size = 8
+
+torch.manual_seed(123)  #for reproducibility
+
+train_dataset = InstructionDataset(train_data, tokenizer)
+train_loader = DataLoader(train_dataset, batch_size=batch_size, collate_fn=customized_collate_fn, shuffle=True, drop_last = True, num_workers=num_workders)
+
+val_dataset = InstructionDataset(val_data, tokenizer)
+val_loader = DataLoader(val_dataset, batch_size=batch_size, collate_fn=customized_collate_fn, shuffle=False, drop_last = False, num_workers=num_workders)
+
+test_dataset = InstructionDataset(test_data, tokenizer)
+test_loader = DataLoader(test_dataset, batch_size=batch_size, collate_fn=customized_collate_fn, shuffle=False, drop_last = False, num_workers=num_workders)
+
+#examine the dimensions of the first batch of inputs and targets from the training dataloader
+print("Train loader:")
+for inputs, targets in train_loader:
+    print(inputs.shape, targets.shape)
