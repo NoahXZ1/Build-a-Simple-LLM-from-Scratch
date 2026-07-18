@@ -335,3 +335,13 @@ model.eval();
 torch.manual_seed(123)
 input_text = format_input(val_data[0])
 print(input_text)
+
+#then generate the model's response using the same generation function used in chp5
+from chp5_Pretraining_on_unlabed_data import generate, text_to_token_ids, token_ids_to_text
+
+token_ids = generate(model=model, idx=text_to_token_ids(input_text, tokenizer), max_new_tokens=35, context_size=BASE_CONFIG["context_length"], eos_id=50256,)
+generated_text = token_ids_to_text(token_ids, tokenizer)
+
+#to isolate the model's response, we can split the generated text at the "### Response" 
+response_text = generated_text[len(input_text):].strip()
+print(response_text)
