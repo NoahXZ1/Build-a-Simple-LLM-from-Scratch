@@ -218,3 +218,116 @@ test_loader = DataLoader(test_dataset, batch_size=batch_size, collate_fn=customi
 print("Train loader:")
 for inputs, targets in train_loader:
     print(inputs.shape, targets.shape)
+"""------------------------------7.5 Loading the pretrained model and preparing it for fine-tuning----------------------------"""
+#we will use the mid-sized GPT-2 model, as small size is not sufficient for instruction fine-tuning
+import numpy as np
+from gpt_download import download_and_load_gpt2
+from ch4_Implementation_of_LLM_architecture import GPTModel
+
+# NOTE: load_weights_into_gpt is copied here (instead of imported from
+# chp5_Pretraining_on_unlabed_data) because that module has no
+# `if __name__ == "__main__":` guard -- importing it re-runs its entire
+# demo pipeline (builds/trains its own models, re-downloads a GPT-2
+# checkpoint, and moves several models onto the GPU), which was stacking
+# on top of this script's own model and causing CUDA OOM errors.
+def assign(left, right):
+    right = torch.as_tensor(right, dtype=left.dtype, device=left.device)
+    if left.shape != right.shape:
+        raise ValueError(f"Shape mismatch. Left: {left.shape}, "
+                          f"Right: {right.shape}"
+        )
+    return torch.nn.Parameter(right.clone().detach())
+
+
+def load_weights_into_gpt(gpt, params):
+    gpt.pos_emb.weight = assign(gpt.pos_emb.weight, params['wpe'])
+    gpt.tok_emb.weight = assign(gpt.tok_emb.weight, params['wte'])
+
+    for b in range(len(params["blocks"])):
+        q_w, k_w, v_w = np.split(
+            (params["blocks"][b]["attn"]["c_attn"])["w"], 3, axis=-1)
+        gpt.trf_blocks[b].att.W_query.weight = assign(
+            gpt.trf_blocks[b].att.W_query.weight, q_w.T)
+        gpt.trf_blocks[b].att.W_key.weight = assign(
+            gpt.trf_blocks[b].att.W_key.weight, k_w.T)
+        gpt.trf_blocks[b].att.W_value.weight = assign(
+            gpt.trf_blocks[b].att.W_value.weight, v_w.T)
+
+        q_b, k_b, v_b = np.split(
+            (params["blocks"][b]["attn"]["c_attn"])["b"], 3, axis=-1)
+        gpt.trf_blocks[b].att.W_query.bias = assign(
+            gpt.trf_blocks[b].att.W_query.bias, q_b)
+        gpt.trf_blocks[b].att.W_key.bias = assign(
+            gpt.trf_blocks[b].att.W_key.bias, k_b)
+        gpt.trf_blocks[b].att.W_value.bias = assign(
+            gpt.trf_blocks[b].att.W_value.bias, v_b)
+
+        gpt.trf_blocks[b].att.out_proj.weight = assign(
+            gpt.trf_blocks[b].att.out_proj.weight,
+            params["blocks"][b]["attn"]["c_proj"]["w"].T
+        )
+        gpt.trf_blocks[b].att.out_proj.bias = assign(
+            gpt.trf_blocks[b].att.out_proj.bias,
+            params["blocks"][b]["attn"]["c_proj"]["b"]
+        )
+
+        gpt.trf_blocks[b].ff.layers[0].weight = assign(
+            gpt.trf_blocks[b].ff.layers[0].weight,
+            params["blocks"][b]["mlp"]["c_fc"]["w"].T)
+        gpt.trf_blocks[b].ff.layers[0].bias = assign(
+            gpt.trf_blocks[b].ff.layers[0].bias,
+            params["blocks"][b]["mlp"]["c_fc"]["b"])
+        gpt.trf_blocks[b].ff.layers[2].weight = assign(
+            gpt.trf_blocks[b].ff.layers[2].weight,
+            params["blocks"][b]["mlp"]["c_proj"]["w"].T
+        )
+        gpt.trf_blocks[b].ff.layers[2].bias = assign(
+            gpt.trf_blocks[b].ff.layers[2].bias,
+            params["blocks"][b]["mlp"]["c_proj"]["b"]
+        )
+
+        gpt.trf_blocks[b].norm1.scale = assign(
+            gpt.trf_blocks[b].norm1.scale,
+            params["blocks"][b]["ln_1"]["g"]
+        )
+        gpt.trf_blocks[b].norm1.shift = assign(
+            gpt.trf_blocks[b].norm1.shift,
+            params["blocks"][b]["ln_1"]["b"]
+        )
+        gpt.trf_blocks[b].norm2.scale = assign(
+            gpt.trf_blocks[b].norm2.scale,
+            params["blocks"][b]["ln_2"]["g"]
+        )
+        gpt.trf_blocks[b].norm2.shift = assign(
+            gpt.trf_blocks[b].norm2.shift,
+            params["blocks"][b]["ln_2"]["b"])
+
+    gpt.final_norm.scale = assign(gpt.final_norm.scale, params["g"])
+    gpt.final_norm.shift = assign(gpt.final_norm.shift, params["b"])
+    gpt.out_head.weight = assign(gpt.out_head.weight, params["wte"])
+
+BASE_CONFIG = {
+    "vocab_size": 50257,
+    "context_length": 1024,
+    "drop_rate": 0.0,   #dropout rate
+    "qkv_bias": True    #query-key-value bias
+}
+
+model_configs = {
+    "gpt2-small (124M)":{"emb_dim": 768, "n_layers": 12, "n_heads": 12},
+    "gpt2-medium (355M)":{"emb_dim": 1024, "n_layers": 24, "n_heads": 16},
+    "gpt2-large (774M)":{"emb_dim": 1280, "n_layers": 36, "n_heads": 20},
+    "gpt2-xl (1558M)":{"emb_dim": 1600, "n_layers": 48, "n_heads": 25},
+}
+
+CHOOSE_MODEL = "gpt2-small (124M)"
+BASE_CONFIG.update(model_configs[CHOOSE_MODEL])
+
+# Extract "355M" from "gpt2-medium (355M)" for use as the download param
+model_size = CHOOSE_MODEL.split(" ")[-1].lstrip("(").rstrip(")")
+
+settings, params = download_and_load_gpt2(model_size = model_size, models_dir = "gpt2")
+
+model = GPTModel(BASE_CONFIG)
+load_weights_into_gpt(model, params)
+model.eval();
