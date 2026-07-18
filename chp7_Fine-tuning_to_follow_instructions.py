@@ -331,3 +331,7 @@ settings, params = download_and_load_gpt2(model_size = model_size, models_dir = 
 model = GPTModel(BASE_CONFIG)
 load_weights_into_gpt(model, params)
 model.eval();
+#try a sample from validation set to see the model's performance without fine-tuning
+torch.manual_seed(123)
+input_text = format_input(val_data[0])
+print(input_text)
