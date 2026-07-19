@@ -383,3 +383,23 @@ print(f"Training completed in {execution_time_minutes:.2f} minutes.")
 from chp5_Pretraining_on_unlabed_data import plot_losses
 epochs_tensor = torch.linspace(0, num_epochs, len(train_losses))
 plot_losses(epochs_tensor, tokens_seen, train_losses, val_losses)
+"""--------------------------7.7 Extracting and saving the fine-tuning model-----------------------------"""
+#print the model's response alongside the expected test set answers for the first 3 entries in the test set
+torch.manual_seed(123)
+#iterate throught the first 3 test set samples
+for entry in test_data[:3]:
+    input_text = format_input(entry)
+    #use the generate function imported before
+    token_ids = generate(
+        model=model, idx=text_to_token_ids(input_text, tokenizer).to(device),
+        max_new_tokens=256,
+        context_size = BASE_CONFIG["context_length"],
+        eos_id =50256
+    )
+    generated_text = token_ids_to_text(token_ids, tokenizer)
+
+    response_text = (generated_text[len(input_text):].replace("### Response:", "").strip())
+    print(input_text)
+    print(f"\nCorrect response:\n{entry['output']}")
+    print(f"\nModel's response:\n{response_text.strip()}")
+    print("------------------------------------")
