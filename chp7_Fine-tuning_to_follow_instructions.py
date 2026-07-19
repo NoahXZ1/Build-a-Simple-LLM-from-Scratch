@@ -345,3 +345,36 @@ generated_text = token_ids_to_text(token_ids, tokenizer)
 #to isolate the model's response, we can split the generated text at the "### Response" 
 response_text = generated_text[len(input_text):].strip()
 print(response_text)
+"""--------------------------7.6 Fine-tuning the LLM on instruction data-----------------------------"""
+#use the loss calculation function from chp5
+from chp5_Pretraining_on_unlabed_data import (calc_loss_loader, train_model_simple)
+
+#calculate the initial loss
+model.to(device)
+torch.manual_seed(123)
+with torch.no_grad():
+    train_loss = calc_loss_loader(train_loader, model, device, num_batches=5)
+    val_loss = calc_loss_loader(val_loader, model, device, num_batches=5)
+print("Training loss:", train_loss)
+print("Validation loss:", val_loss)
+
+#set up the training process
+#step 1: initialize the optimizer
+#step 2: setting the number of epochs(how many times the model will see the entire training set) and learning rate
+#step 3: defining the evaluation frequency (how often the model will be evaluated on the validation set during training)
+#step 4: starting context to evaluate generated response during training (choose a sample from the validation set and let the model generate a response to it after every evaluation frequency)
+import time
+
+start_time = time.time()
+torch.manual_seed(123)
+optimizer = torch.optim.AdamW(model.parameters(), lr =0.00005, weight_decay=0.1)
+num_epochs = 2
+
+train_losses, val_losses, tokens_seen = train_model_simple(
+    model, train_loader, val_loader, optimizer, device, num_epochs=num_epochs, 
+    eval_freq=5, eval_iter=5, start_context=format_input(val_data[0]), tokenizer = tokenizer
+)
+
+end_time = time.time()
+execution_time_minutes = (end_time - start_time) / 60
+print(f"Training completed in {execution_time_minutes:.2f} minutes.")
