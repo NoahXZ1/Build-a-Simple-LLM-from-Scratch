@@ -349,40 +349,56 @@ print(response_text)
 #use the loss calculation function from chp5
 from chp5_Pretraining_on_unlabed_data import (calc_loss_loader, train_model_simple)
 
-#calculate the initial loss
+#set RUN_TRAINING = False to skip the (slow) training run and reload a previously saved
+#fine-tuned checkpoint instead, so downstream sections (7.7) can still run against a trained model
+RUN_TRAINING = True
+finetuned_model_path = "gpt2-medium355M-sft.pth"
+
 model.to(device)
-torch.manual_seed(123)
-with torch.no_grad():
-    train_loss = calc_loss_loader(train_loader, model, device, num_batches=5)
-    val_loss = calc_loss_loader(val_loader, model, device, num_batches=5)
-print("Training loss:", train_loss)
-print("Validation loss:", val_loss)
 
-#set up the training process
-#step 1: initialize the optimizer
-#step 2: setting the number of epochs(how many times the model will see the entire training set) and learning rate
-#step 3: defining the evaluation frequency (how often the model will be evaluated on the validation set during training)
-#step 4: starting context to evaluate generated response during training (choose a sample from the validation set and let the model generate a response to it after every evaluation frequency)
-import time
+if RUN_TRAINING:
+    #calculate the initial loss
+    torch.manual_seed(123)
+    with torch.no_grad():
+        train_loss = calc_loss_loader(train_loader, model, device, num_batches=5)
+        val_loss = calc_loss_loader(val_loader, model, device, num_batches=5)
+    print("Training loss:", train_loss)
+    print("Validation loss:", val_loss)
 
-start_time = time.time()
-torch.manual_seed(123)
-optimizer = torch.optim.AdamW(model.parameters(), lr =0.00005, weight_decay=0.1)
-num_epochs = 2
+    #set up the training process
+    #step 1: initialize the optimizer
+    #step 2: setting the number of epochs(how many times the model will see the entire training set) and learning rate
+    #step 3: defining the evaluation frequency (how often the model will be evaluated on the validation set during training)
+    #step 4: starting context to evaluate generated response during training (choose a sample from the validation set and let the model generate a response to it after every evaluation frequency)
+    import time
 
-train_losses, val_losses, tokens_seen = train_model_simple(
-    model, train_loader, val_loader, optimizer, device, num_epochs=num_epochs, 
-    eval_freq=5, eval_iter=5, start_context=format_input(val_data[0]), tokenizer = tokenizer
-)
+    start_time = time.time()
+    torch.manual_seed(123)
+    optimizer = torch.optim.AdamW(model.parameters(), lr =0.00005, weight_decay=0.1)
+    num_epochs = 2
 
-end_time = time.time()
-execution_time_minutes = (end_time - start_time) / 60
-print(f"Training completed in {execution_time_minutes:.2f} minutes.")
+    train_losses, val_losses, tokens_seen = train_model_simple(
+        model, train_loader, val_loader, optimizer, device, num_epochs=num_epochs,
+        eval_freq=5, eval_iter=5, start_context=format_input(val_data[0]), tokenizer = tokenizer
+    )
 
-#draw the plot of training and validation losses over time
-from chp5_Pretraining_on_unlabed_data import plot_losses
-epochs_tensor = torch.linspace(0, num_epochs, len(train_losses))
-plot_losses(epochs_tensor, tokens_seen, train_losses, val_losses)
+    end_time = time.time()
+    execution_time_minutes = (end_time - start_time) / 60
+    print(f"Training completed in {execution_time_minutes:.2f} minutes.")
+
+    #draw the plot of training and validation losses over time
+    from chp5_Pretraining_on_unlabed_data import plot_losses
+    epochs_tensor = torch.linspace(0, num_epochs, len(train_losses))
+    plot_losses(epochs_tensor, tokens_seen, train_losses, val_losses)
+
+    #save the fine-tuned model so it can be reloaded later without retraining
+    torch.save(model.state_dict(), finetuned_model_path)
+    print(f"Model saved as {finetuned_model_path}")
+else:
+    #skip training: load the previously fine-tuned checkpoint instead
+    model.load_state_dict(torch.load(finetuned_model_path, map_location=device))
+    model.eval()
+    print(f"Skipped training, loaded fine-tuned model from {finetuned_model_path}")
 """--------------------------7.7 Extracting and saving the fine-tuning model-----------------------------"""
 #print the model's response alongside the expected test set answers for the first 3 entries in the test set
 torch.manual_seed(123)
@@ -423,3 +439,11 @@ for i, entry in tqdm(enumerate(test_data), total=len(test_data)):
 with open("instruction-data-with-response.json", "w") as file:
     #indent for pretty-printing
     json.dump(test_data, file, indent=4)
+#verify the responses have been correctly added to the test_set dictionary
+print(test_data[0])
+#save the model as gpt2-medium355M-sft.pth file to reuse later
+import re
+#remove white space and parentheses from file name
+file_name = f"{re.sub(r'[ ()]', '', CHOOSE_MODEL) }-sft.pth"
+torch.save(model.state_dict(), file_name)
+print(f"Model saved as {file_name}")
